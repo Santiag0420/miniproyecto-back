@@ -1,60 +1,89 @@
-# 🔙 miniproyecto-back — Backend
+# miniproyecto-back — Backend
 
-Backend del Proyecto Integrador I, construido con **Django** y **Django REST Framework**, conectado a una base de datos **PostgreSQL** en **Supabase**.
+Backend del Proyecto Integrador I, construido con **Django** y **Django REST Framework**, conectado a una base de datos **PostgreSQL** en **Supabase**. Incluye autenticación mediante **JWT**.
 
-## 📋 Descripción
+## Descripción
 
-API REST que gestiona los datos de usuarios y actividades. Provee los endpoints que consume el frontend.
+API REST que gestiona usuarios y autenticación. Provee los endpoints que consume el frontend React.
 
 ### Endpoints disponibles
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/` | Mensaje de bienvenida |
-| GET | `/api/users/` | Lista todos los usuarios |
-| — | `/admin/` | Panel de administración de Django |
+| Método | Ruta | Descripción | Auth requerida |
+|--------|------|-------------|----------------|
+| GET | `/` | Mensaje de bienvenida | No |
+| GET | `/admin/` | Panel de administración de Django | No |
+| GET | `/api/users/` | Lista todos los usuarios | No |
+| POST | `/api/users/register/` | Registrar nuevo usuario | No |
+| POST | `/api/auth/login/` | Iniciar sesión — devuelve `access` y `refresh` tokens | No |
+| POST | `/api/auth/token/refresh/` | Renovar el access token usando el refresh token | No |
 
-## 🛠️ Tecnologías
+#### Ejemplo: Registrar usuario
 
-- [Python 3](https://www.python.org/) — Lenguaje de programación
+```json
+POST /api/users/register/
+{
+  "username": "juanito",
+  "email": "juan@email.com",
+  "password": "mipassword123"
+}
+```
+
+#### Ejemplo: Login
+
+```json
+POST /api/auth/login/
+{
+  "username": "juanito",
+  "password": "mipassword123"
+}
+```
+
+Respuesta:
+```json
+{
+  "access": "<token de corta duración>",
+  "refresh": "<token de larga duración>"
+}
+```
+
+## Tecnologías
+
+- [Python 3.14](https://www.python.org/) — Lenguaje de programación
 - [Django 6.0](https://www.djangoproject.com/) — Framework web
 - [Django REST Framework](https://www.django-rest-framework.org/) — Toolkit para APIs REST
+- [djangorestframework-simplejwt](https://django-rest-framework-simplejwt.readthedocs.io/) — Autenticación JWT
 - [PostgreSQL](https://www.postgresql.org/) — Base de datos relacional
-- [Supabase](https://supabase.com/) — Hosting de base de datos (PostgreSQL en la nube)
+- [Supabase](https://supabase.com/) — Hosting de base de datos en la nube
 - [python-dotenv](https://pypi.org/project/python-dotenv/) — Carga de variables de entorno
 - [django-cors-headers](https://pypi.org/project/django-cors-headers/) — Manejo de CORS
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 miniproyecto-back/
 ├── backend/
-│   ├── backend/               # Configuración del proyecto Django
-│   │   ├── __init__.py
-│   │   ├── settings.py        # Configuración principal
-│   │   ├── urls.py            # Rutas principales
-│   │   ├── wsgi.py            # Configuración WSGI
-│   │   └── asgi.py            # Configuración ASGI
-│   ├── users/                 # App de usuarios
-│   │   ├── __init__.py
-│   │   ├── admin.py           # Registro en el admin
-│   │   ├── apps.py            # Configuración de la app
-│   │   ├── models.py          # Modelo Usuario
-│   │   ├── urls.py            # Rutas de la app
-│   │   ├── views.py           # Vistas / controladores
-│   │   └── tests.py           # Tests unitarios
+│   ├── config/                # Configuración central del proyecto Django
+│   │   ├── settings.py        # Configuración principal (BD, apps, JWT, CORS)
+│   │   ├── urls.py            # Rutas principales de toda la API
+│   │   ├── wsgi.py            # Entrada para servidores WSGI (producción)
+│   │   └── asgi.py            # Entrada para servidores ASGI (async)
+│   ├── apps/                  # Carpeta que agrupa todas las apps del proyecto
+│   │   └── users/             # App de usuarios y autenticación
+│   │       ├── models.py      # Modelo Usuario (tabla existente en Supabase)
+│   │       ├── views.py       # Vistas: listar usuarios y registrar cuenta
+│   │       ├── urls.py        # Rutas: /api/users/ y /api/users/register/
+│   │       ├── apps.py        # Configuración de la app
+│   │       └── admin.py       # Registro en el panel admin
 │   └── manage.py              # CLI de Django
-├── .env                       # Variables de entorno (no se sube a git)
-├── .env.example               # Plantilla de variables de entorno
-├── .gitignore                 # Archivos ignorados por git
-├── prod-ca-2021.crt           # Certificado SSL para Supabase
-├── requirements.txt           # Dependencias de Python
+├── .env                       # Variables de entorno (NO subir a git)
+├── prod-ca-2021.crt           # Certificado SSL para conexión segura a Supabase
+├── requirements.txt           # Dependencias exactas de Python
 └── README.md                  # Este archivo
 ```
 
-## 🗃️ Modelo de Datos
+## Modelos de Datos
 
-### Usuario
+### Usuario (tabla `users` — existente en Supabase)
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
@@ -63,54 +92,60 @@ miniproyecto-back/
 | `name` | CharField(100) | Nombre del usuario |
 | `age` | IntegerField | Edad del usuario |
 
-> **Nota:** El modelo usa `managed = False` y `db_table = 'users'`, lo que significa que Django no gestiona la tabla — esta ya existe en Supabase.
+> `managed = False` indica que Django no crea ni modifica esta tabla con migraciones — ya existe en Supabase.
 
-## 🚀 Instalación y Ejecución
+### User de Django (`auth_user` — gestionada por Django)
+
+Tabla estándar de Django usada para el sistema de autenticación (login/register con JWT). Se crea ejecutando `python manage.py migrate`.
+
+## Instalación y Ejecución
 
 ### Requisitos previos
 
 - [Python 3.10+](https://www.python.org/downloads/)
-- [pip](https://pip.pypa.io/)
 
 ### Pasos
 
 ```bash
 # 1. Ir a la carpeta del backend
-cd miniproyecto-back
+cd miniproyecto-back/backend
 
-# 2. (Opcional) Crear un entorno virtual
+# 2. Crear un entorno virtual
 python -m venv venv
+
+# 3. Activar el entorno virtual
 venv\Scripts\activate        # Windows
 # source venv/bin/activate   # macOS/Linux
 
-# 3. Instalar dependencias
-python -m pip install -r requirements.txt
+# 4. Instalar dependencias
+python -m pip install -r ../requirements.txt
 
-# 4. Configurar variables de entorno
-cp .env.example .env
-# Editar .env con las credenciales de tu base de datos
+# 5. Configurar variables de entorno
+# Crear el archivo .env en miniproyecto-back/ con las variables listadas abajo
 
-# 5. Ir a la carpeta donde está manage.py
-cd backend
+# 6. Crear las tablas de autenticación en la base de datos
+python manage.py migrate
 
-# 6. Iniciar el servidor
+# 7. Iniciar el servidor
 python manage.py runserver
 ```
 
 El backend estará disponible en **http://localhost:8000**
 
-## ⚙️ Variables de Entorno
+> **Nota Windows:** Si `pip` no funciona directamente, usar `python -m pip install ...`
 
-Crear un archivo `.env` en la raíz de `miniproyecto-back/` con las siguientes variables:
+## Variables de Entorno
+
+Crear un archivo `.env` en `miniproyecto-back/` con las siguientes variables:
 
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
 | `DB_NAME` | Nombre de la base de datos | `postgres` |
 | `DB_USER` | Usuario de la base de datos | `postgres.xxxxx` |
 | `DB_PASSWORD` | Contraseña de la base de datos | `tu_contraseña` |
-| `DB_HOST` | Host de la base de datos | `aws-1-us-east-1.pooler.supabase.com` |
+| `DB_HOST` | Host de Supabase | `aws-1-us-east-1.pooler.supabase.com` |
 | `DB_PORT` | Puerto de la base de datos | `6543` |
-| `DJANGO_SECRET_KEY` | Clave secreta de Django | _(generada automáticamente)_ |
+| `DJANGO_SECRET_KEY` | Clave secreta de Django | _(ver comando abajo)_ |
 
 ### Generar una nueva SECRET_KEY
 
@@ -118,8 +153,10 @@ Crear un archivo `.env` en la raíz de `miniproyecto-back/` con las siguientes v
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-## 🔒 Seguridad
+## Seguridad
 
-- Las credenciales sensibles están en `.env` (excluido de git vía `.gitignore`)
+- Las credenciales sensibles están en `.env` (excluido de git)
 - La conexión a Supabase usa SSL con certificado (`prod-ca-2021.crt`)
-- CORS está habilitado para permitir conexiones del frontend
+- Las contraseñas se guardan hasheadas — nunca en texto plano
+- Los tokens JWT tienen tiempo de expiración configurable en `settings.py`
+- En producción: cambiar `CORS_ALLOW_ALL_ORIGINS = True` por `CORS_ALLOWED_ORIGINS` con los dominios permitidos
