@@ -20,6 +20,9 @@ urlpatterns = [
     # Rutas de la app users: listar usuarios y registrar nuevos.
     path('api/users/', include('apps.users.urls')),
 
+    # Rutas de actividades y subtareas (US-01, US-02, US-03).
+    path('api/activities/', include('apps.activities.urls')),
+
     # Autenticación JWT: login devuelve access + refresh token.
     path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
 
