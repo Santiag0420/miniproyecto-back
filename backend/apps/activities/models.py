@@ -1,19 +1,19 @@
 from django.db import models
-from apps.users.models import Usuario
+from django.contrib.auth.models import User
 
 
 class Activity(models.Model):
     """
     Representa una actividad evaluativa (US-01).
+    Se enlaza al User de Django auth (el mismo que usa JWT),
+    NO al modelo Usuario de Supabase.
     Campos obligatorios: titulo, tipo, curso.
     Campos opcionales: descripcion, fecha_evento, fecha_limite.
     """
     usuario = models.ForeignKey(
-        Usuario,
+        User,
         on_delete=models.CASCADE,
-        related_name='activities',
-        null=True,
-        blank=True
+        related_name='activities'
     )
 
     class TipoActividad(models.TextChoices):
@@ -53,7 +53,7 @@ class SubActivity(models.Model):
     )
     nombre = models.CharField(max_length=255)
     fecha_objetivo = models.DateField()
-    # Horas estimadas para completar la subtarea — entero o decimal simple (US-02)
+    # Horas estimadas — entero o decimal simple, debe ser mayor a 0 (US-02)
     horas_estimadas = models.DecimalField(max_digits=5, decimal_places=1)
     completada = models.BooleanField(default=False)
 
