@@ -6,28 +6,25 @@ from .serializers import ActivitySerializer, SubActivitySerializer
 
 class ActivityListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/activities/  → lista las actividades del usuario autenticado (US-01)
-    POST /api/activities/  → crea una nueva actividad (US-01)
-    El campo 'usuario' se asigna automáticamente desde request.user (JWT).
+    Lista todas las actividades del usuario autenticado o crea una nueva.
+    El campo 'usuario' se asigna automáticamente desde el token JWT,
+    garantizando que cada actividad quede enlazada a quien la creó.
     """
     serializer_class = ActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Cada usuario solo ve sus propias actividades
+        # Filtra para que cada usuario solo vea sus propias actividades
         return Activity.objects.filter(usuario=self.request.user)
 
     def perform_create(self, serializer):
-        # Enlaza la actividad al usuario autenticado via JWT
         serializer.save(usuario=self.request.user)
 
 
 class ActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/activities/<id>/  → detalle de la actividad con sus subtareas (US-01, US-02)
-    PATCH  /api/activities/<id>/  → editar campos de la actividad (US-03)
-    DELETE /api/activities/<id>/  → eliminar la actividad y sus subtareas (US-03)
-    Solo permite acceder a actividades que pertenecen al usuario autenticado.
+    Recupera, edita o elimina una actividad específica del usuario autenticado.
+    Al eliminar una actividad, se borran en cascada todas sus subtareas.
     """
     serializer_class = ActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -38,9 +35,9 @@ class ActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class SubActivityListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/activities/<activity_pk>/subtasks/  → lista subtareas de la actividad (US-02)
-    POST /api/activities/<activity_pk>/subtasks/  → crea una nueva subtarea (US-02)
-    Verifica que la actividad padre pertenezca al usuario autenticado.
+    Lista las subtareas de una actividad o agrega una nueva.
+    Verifica que la actividad padre pertenezca al usuario autenticado
+    antes de operar, devolviendo 404 si no existe o no le pertenece.
     """
     serializer_class = SubActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -65,9 +62,8 @@ class SubActivityListCreateView(generics.ListCreateAPIView):
 
 class SubActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/activities/<activity_pk>/subtasks/<id>/  → detalle subtarea (US-02)
-    PATCH  /api/activities/<activity_pk>/subtasks/<id>/  → editar subtarea (US-03)
-    DELETE /api/activities/<activity_pk>/subtasks/<id>/  → eliminar subtarea (US-03)
+    Recupera, edita o elimina una subtarea específica.
+    Solo accesible si la actividad padre pertenece al usuario autenticado.
     """
     serializer_class = SubActivitySerializer
     permission_classes = [permissions.IsAuthenticated]

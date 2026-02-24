@@ -19,7 +19,7 @@ class SubActivitySerializer(serializers.ModelSerializer):
 
 
 class ActivitySerializer(serializers.ModelSerializer):
-    # Subtareas anidadas — solo lectura; se crean por su propio endpoint
+    # Las subtareas se incluyen en la respuesta del detalle de la actividad
     subactivities = SubActivitySerializer(many=True, read_only=True)
 
     class Meta:

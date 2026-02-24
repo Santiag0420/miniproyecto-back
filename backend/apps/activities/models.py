@@ -4,11 +4,10 @@ from django.contrib.auth.models import User
 
 class Activity(models.Model):
     """
-    Representa una actividad evaluativa (US-01).
-    Se enlaza al User de Django auth (el mismo que usa JWT),
-    NO al modelo Usuario de Supabase.
-    Campos obligatorios: titulo, tipo, curso.
-    Campos opcionales: descripcion, fecha_evento, fecha_limite.
+    Actividad evaluativa creada por un estudiante.
+    Se enlaza al usuario autenticado de Django (auth.User), el mismo que
+    maneja el login y los tokens JWT. Los campos fecha_evento y fecha_limite
+    son opcionales según el tipo de actividad.
     """
     usuario = models.ForeignKey(
         User,
@@ -31,9 +30,9 @@ class Activity(models.Model):
     titulo = models.CharField(max_length=255)
     descripcion = models.TextField(blank=True, null=True)
     curso = models.CharField(max_length=255)
-    # Fecha y hora en que ocurre el evento (examen, entrega, etc.) — opcional (US-01)
+    # Fecha y hora del evento (examen, quiz, entrega presencial, etc.)
     fecha_evento = models.DateTimeField(null=True, blank=True)
-    # Fecha límite de entrega — opcional (US-01)
+    # Fecha límite para entregar o completar la actividad
     fecha_limite = models.DateField(null=True, blank=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
@@ -43,8 +42,9 @@ class Activity(models.Model):
 
 class SubActivity(models.Model):
     """
-    Subtarea asociada a una actividad (US-02).
-    Campos obligatorios: nombre, fecha_objetivo, horas_estimadas (> 0).
+    Subtarea que divide el trabajo de una actividad en pasos concretos.
+    Permite estimar el tiempo necesario y hacer seguimiento del avance
+    mediante el campo completada.
     """
     activity = models.ForeignKey(
         Activity,
@@ -53,7 +53,7 @@ class SubActivity(models.Model):
     )
     nombre = models.CharField(max_length=255)
     fecha_objetivo = models.DateField()
-    # Horas estimadas — entero o decimal simple, debe ser mayor a 0 (US-02)
+    # Tiempo estimado para completar esta subtarea (acepta decimales, ej: 1.5)
     horas_estimadas = models.DecimalField(max_digits=5, decimal_places=1)
     completada = models.BooleanField(default=False)
 
