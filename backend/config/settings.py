@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',       # API REST con Django REST Framework
     'corsheaders',          # Permite solicitudes cross-origin desde el frontend
     'apps.users',           # App de usuarios: modelos, vistas y endpoints
+    'apps.activities',      # App de actividades evaluativas y subtareas
 ]
 
 # --- Middleware ---
