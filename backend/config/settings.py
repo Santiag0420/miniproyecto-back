@@ -14,9 +14,20 @@ load_dotenv(BASE_DIR.parent / '.env')
 # Clave secreta de Django — nunca exponerla en producción.
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
-# En producción cambiar a False y configurar ALLOWED_HOSTS con el dominio real.
-DEBUG = True
-ALLOWED_HOSTS = []
+# En producción establecer DEBUG=False en las variables de entorno de Render.
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+ALLOWED_HOSTS = [
+    'miniproyecto-back.onrender.com',
+    '.onrender.com',
+    'localhost',
+    '127.0.0.1',
+]
+
+# Render termina SSL en su proxy y reenvía las requests como HTTP.
+# Estas dos configuraciones le dicen a Django que confíe en los headers del proxy.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 
 # --- Aplicaciones instaladas ---
