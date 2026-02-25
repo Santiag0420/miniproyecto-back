@@ -49,6 +49,7 @@ INSTALLED_APPS = [
 # CorsMiddleware debe estar lo más arriba posible para manejar preflight requests.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # sirve archivos estáticos (admin CSS)
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -114,7 +115,9 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+# Directorio donde collectstatic agrupa todos los archivos estáticos para producción
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # --- CORS ---
 # En desarrollo se permiten todos los orígenes. En producción usar CORS_ALLOWED_ORIGINS.
