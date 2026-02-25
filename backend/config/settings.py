@@ -17,12 +17,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 # En producción establecer DEBUG=False en las variables de entorno de Render.
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = [
-    'miniproyecto-back.onrender.com',
-    '.onrender.com',
-    'localhost',
-    '127.0.0.1',
-]
+ALLOWED_HOSTS = ['*']
 
 # Render termina SSL en su proxy y reenvía las requests como HTTP.
 # Estas dos configuraciones le dicen a Django que confíe en los headers del proxy.
