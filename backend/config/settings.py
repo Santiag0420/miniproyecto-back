@@ -55,7 +55,7 @@ MIDDLEWARE = [
 ]
 
 # Módulo que contiene el router principal de URLs del proyecto.
-ROOT_URLCONF = 'config.urls'
+ROOT_URLCONF = 'backend.config.urls'
 
 TEMPLATES = [
     {
@@ -73,7 +73,7 @@ TEMPLATES = [
 ]
 
 # Punto de entrada para servidores WSGI (producción con Gunicorn, etc.).
-WSGI_APPLICATION = 'config.wsgi.application'
+WSGI_APPLICATION = 'backend.config.wsgi.application'
 
 
 # --- Base de datos ---
