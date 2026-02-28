@@ -6,6 +6,14 @@ Backend del Proyecto Integrador I, construido con **Django** y **Django REST Fra
 
 API REST que gestiona usuarios, autenticación y actividades evaluativas. Provee los endpoints que consume el frontend React.
 
+## Documentación interactiva de la API
+
+| Interfaz | Ruta | Descripción |
+|---|---|---|
+| Swagger UI | `/api/docs/` | Interfaz visual para explorar y probar los endpoints |
+| ReDoc | `/api/redoc/` | Vista de documentación alternativa más legible |
+| Esquema OpenAPI | `/api/schema/` | Esquema en formato JSON/YAML para importar en Postman u otras herramientas |
+
 ## Endpoints disponibles
 
 ### Autenticación y usuarios
@@ -104,6 +112,7 @@ Authorization: Bearer <access_token>
 - [Django 6.0](https://www.djangoproject.com/) — Framework web
 - [Django REST Framework](https://www.django-rest-framework.org/) — Toolkit para APIs REST
 - [djangorestframework-simplejwt](https://django-rest-framework-simplejwt.readthedocs.io/) — Autenticación JWT
+- [drf-spectacular](https://drf-spectacular.readthedocs.io/) — Documentación automática OpenAPI (Swagger + ReDoc)
 - [Gunicorn](https://gunicorn.org/) — Servidor WSGI para producción
 - [PostgreSQL](https://www.postgresql.org/) — Base de datos relacional
 - [Supabase](https://supabase.com/) — Hosting de base de datos en la nube
