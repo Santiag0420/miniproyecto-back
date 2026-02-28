@@ -3,6 +3,7 @@ Configuración principal del proyecto Django.
 Las variables sensibles se cargan desde el archivo .env ubicado en miniproyecto-back/.env
 """
 from pathlib import Path
+from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
@@ -128,6 +129,17 @@ REST_FRAMEWORK = {
     ),
     # Indica a DRF que use drf-spectacular para generar el esquema OpenAPI
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# --- Configuración de tokens JWT ---
+# El access token expira a los 15 minutos — si el usuario está inactivo
+# ese tiempo, la sesión se cierra y debe volver a iniciar sesión.
+# El refresh token dura 1 día y permite renovar el access token sin re-login
+# mientras el usuario siga activo dentro de ese período.
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
 }
 
 SPECTACULAR_SETTINGS = {
