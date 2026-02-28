@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',       # API REST con Django REST Framework
+    'drf_spectacular',      # Generación automática de documentación OpenAPI
     'corsheaders',          # Permite solicitudes cross-origin desde el frontend
     'backend.apps.users',           # App de usuarios: modelos, vistas y endpoints
     'backend.apps.activities',      # App de actividades evaluativas y subtareas
@@ -125,4 +126,13 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Indica a DRF que use drf-spectacular para generar el esquema OpenAPI
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Mi MINIPROYECTO API',
+    'DESCRIPTION': 'Documentación detallada de los endpoints',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
