@@ -3,6 +3,7 @@ Configuración principal del proyecto Django.
 Las variables sensibles se cargan desde el archivo .env ubicado en miniproyecto-back/.env
 """
 from pathlib import Path
+from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
@@ -35,6 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',       # API REST con Django REST Framework
+    'drf_spectacular',      # Generación automática de documentación OpenAPI
     'corsheaders',          # Permite solicitudes cross-origin desde el frontend
     'backend.apps.users',           # App de usuarios: modelos, vistas y endpoints
     'backend.apps.activities',      # App de actividades evaluativas y subtareas
@@ -125,4 +127,24 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Indica a DRF que use drf-spectacular para generar el esquema OpenAPI
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# --- Configuración de tokens JWT ---
+# El access token expira a los 15 minutos — si el usuario está inactivo
+# ese tiempo, la sesión se cierra y debe volver a iniciar sesión.
+# El refresh token dura 1 día y permite renovar el access token sin re-login
+# mientras el usuario siga activo dentro de ese período.
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Mi MINIPROYECTO API',
+    'DESCRIPTION': 'Documentación detallada de los endpoints',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }

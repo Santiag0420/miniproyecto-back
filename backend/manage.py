@@ -2,10 +2,17 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
+from pathlib import Path
 
 
 def main():
     """Run administrative tasks."""
+    # Agrega la raíz del repositorio al path para que 'backend' sea importable
+    # sin importar desde qué directorio se ejecute este script.
+    root_dir = Path(__file__).resolve().parent.parent
+    if str(root_dir) not in sys.path:
+        sys.path.insert(0, str(root_dir))
+
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.config.settings')
     try:
         from django.core.management import execute_from_command_line
