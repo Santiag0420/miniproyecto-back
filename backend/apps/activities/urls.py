@@ -4,6 +4,7 @@ from .views import (
     ActivityDetailView,
     SubActivityListCreateView,
     SubActivityDetailView,
+    TodayView,
 )
 
 urlpatterns = [
@@ -18,4 +19,7 @@ urlpatterns = [
 
     # Detalle, edición y eliminación de una subtarea específica
     path('<int:activity_pk>/subtasks/<int:pk>/', SubActivityDetailView.as_view(), name='subactivity-detail'),
+
+    #Obtener actividades vencidas, de hoy y proximas
+    path('today/', TodayView.as_view(), name='today'),
 ]

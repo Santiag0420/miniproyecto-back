@@ -2,7 +2,69 @@ from rest_framework import generics, permissions
 from rest_framework.exceptions import NotFound
 from .models import Activity, SubActivity
 from .serializers import ActivitySerializer, SubActivitySerializer
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import permissions
+from django.utils import timezone
+from datetime import date
 
+
+class TodayView(APIView):
+    """
+    Vista 'Hoy': devuelve las actividades del usuario ordenadas por prioridad.
+    Orden: Vencidas > Hoy > Próximas. Desempate por horas_estimadas (mayor primero).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        today = date.today()
+
+        activities = Activity.objects.filter(
+            usuario=request.user
+        ).prefetch_related('subactivities')
+
+        vencidas = []
+        hoy = []
+        proximas = []
+
+        for activity in activities:
+            # Determinar la fecha relevante de la actividad
+            fecha = None
+            if activity.fecha_limite:
+                fecha = activity.fecha_limite
+            elif activity.fecha_evento:
+                fecha = activity.fecha_evento.date()
+
+            # Calcular total de horas estimadas de subtareas no completadas
+            horas = sum(
+                s.horas_estimadas for s in activity.subactivities.all()
+                if not s.completada
+            )
+
+            data = ActivitySerializer(activity).data
+            data['horas_pendientes'] = float(horas)
+            data['fecha_referencia'] = str(fecha) if fecha else None
+
+            if fecha is None:
+                proximas.append(data)
+            elif fecha < today:
+                vencidas.append(data)
+            elif fecha == today:
+                hoy.append(data)
+            else:
+                proximas.append(data)
+
+        # Ordenar cada grupo por horas_pendientes descendente
+        key = lambda x: x['horas_pendientes']
+        vencidas.sort(key=key, reverse=True)
+        hoy.sort(key=key, reverse=True)
+        proximas.sort(key=key, reverse=True)
+
+        return Response({
+            'vencidas': vencidas,
+            'hoy': hoy,
+            'proximas': proximas,
+        })
 
 class ActivityListCreateView(generics.ListCreateAPIView):
     """
