@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',             # WebSockets con Django Channels
     'rest_framework',       # API REST con Django REST Framework
     'drf_spectacular',      # Generación automática de documentación OpenAPI
     'corsheaders',          # Permite solicitudes cross-origin desde el frontend
@@ -108,7 +109,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # --- Internacionalización ---
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Bogota'
 USE_I18N = True
 USE_TZ = True
 
@@ -132,14 +133,19 @@ REST_FRAMEWORK = {
 }
 
 # --- Configuración de tokens JWT ---
-# El access token expira a los 15 minutos — si el usuario está inactivo
-# ese tiempo, la sesión se cierra y debe volver a iniciar sesión.
-# El refresh token dura 1 día y permite renovar el access token sin re-login
-# mientras el usuario siga activo dentro de ese período.
+# Access token: válido 15 minutos. El frontend debe renovarlo automáticamente
+# mientras el usuario esté activo (antes de que expire).
+#
+# Refresh token: válido 30 minutos y se rota en cada uso.
+# Esto simula inactividad: si el usuario no usa la app durante 30 minutos,
+# el refresh token caduca y debe volver a iniciar sesión.
+# Mientras el usuario esté activo, el frontend renueva el token
+# cada ~14 min y el contador de 30 min se reinicia.
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
+    'ACCESS_TOKEN_LIFETIME':  timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ROTATE_REFRESH_TOKENS':  True,
+    'BLACKLIST_AFTER_ROTATION': False,
 }
 
 SPECTACULAR_SETTINGS = {
@@ -147,4 +153,16 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Documentación detallada de los endpoints',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+}
+
+# --- Django Channels ---
+# Punto de entrada ASGI que maneja HTTP y WebSockets.
+ASGI_APPLICATION = 'backend.config.asgi.application'
+
+# Capa de canales en memoria — ideal para desarrollo y un solo proceso.
+# En producción con múltiples workers, reemplazar por RedisChannelLayer.
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    }
 }
