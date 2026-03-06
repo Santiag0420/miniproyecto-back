@@ -1,4 +1,6 @@
 asgiref==3.11.1
+channels==4.2.2
+daphne==4.1.2
 drf-spectacular==0.28.0
 Django==6.0.2
 django-cors-headers==4.9.0
