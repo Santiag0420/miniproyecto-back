@@ -27,6 +27,14 @@ API REST + WebSocket que gestiona usuarios, autenticación y actividades evaluat
 | POST | `/api/auth/login/` | Iniciar sesión — devuelve `access` y `refresh` tokens | No |
 | POST | `/api/auth/token/refresh/` | Renovar el access token usando el refresh token | No |
 
+### Perfil de usuario
+
+| Método | Ruta | Descripción | Auth requerida |
+|--------|------|-------------|----------------|
+| GET | `/api/users/profile/` | Ver perfil completo del usuario autenticado | Sí |
+| PATCH | `/api/users/profile/` | Actualizar username, email, nombres o límite de horas diarias | Sí |
+| POST | `/api/users/change-password/` | Cambiar la contraseña del usuario | Sí |
+
 ### Actividades
 
 | Método | Ruta | Descripción | Auth requerida |
@@ -45,8 +53,28 @@ API REST + WebSocket que gestiona usuarios, autenticación y actividades evaluat
 | GET | `/api/activities/<id>/subtasks/` | Lista las subtareas de una actividad | Sí |
 | POST | `/api/activities/<id>/subtasks/` | Agrega una subtarea a la actividad | Sí |
 | GET | `/api/activities/<id>/subtasks/<id>/` | Detalle de una subtarea | Sí |
-| PATCH | `/api/activities/<id>/subtasks/<id>/` | Edita una subtarea | Sí |
+| PATCH | `/api/activities/<id>/subtasks/<id>/` | Edita una subtarea — detecta sobrecarga diaria | Sí |
 | DELETE | `/api/activities/<id>/subtasks/<id>/` | Elimina una subtarea | Sí |
+
+#### Detección de sobrecarga al editar subtarea
+
+Al hacer `PATCH` sobre una subtarea, si el cambio de `fecha_objetivo` o `horas_estimadas` supera el límite diario del usuario, el endpoint responde `409 Conflict` en lugar de guardar:
+
+```json
+{
+  "conflicto": true,
+  "mensaje": "Quedarías con 7.0h planificadas (límite 6.0h)",
+  "horas_planificadas": 5.0,
+  "horas_nuevas": 7.0,
+  "limite": 6.0,
+  "sugerencias": [
+    { "fecha": "2026-03-11", "horas_disponibles": 4.0 },
+    { "fecha": "2026-03-12", "horas_disponibles": 6.0 }
+  ]
+}
+```
+
+Para guardar de todas formas ignorando el conflicto, incluir `"forzar": true` en el body.
 
 ### WebSocket — Vista en tiempo real
 
@@ -134,6 +162,71 @@ Authorization: Bearer <access_token>
 
 > `fecha_objetivo` debe estar dentro del rango entre `fecha_evento` y `fecha_limite` de la actividad padre.
 
+#### Ver perfil del usuario
+
+```http
+GET /api/users/profile/
+Authorization: Bearer <access_token>
+```
+
+Respuesta:
+```json
+{
+  "username": "juanito",
+  "email": "juan@email.com",
+  "first_name": "Juan",
+  "last_name": "Pérez",
+  "date_joined": "2025-01-15",
+  "limite_horas_diarias": 6.0
+}
+```
+
+#### Actualizar perfil (campos opcionales)
+
+```json
+PATCH /api/users/profile/
+Authorization: Bearer <access_token>
+
+{ "first_name": "Juan", "limite_horas_diarias": 8.0 }
+```
+
+#### Cambiar contraseña
+
+```json
+POST /api/users/change-password/
+Authorization: Bearer <access_token>
+
+{ "current_password": "actual123", "new_password": "nueva456" }
+```
+
+#### Editar subtarea con detección de sobrecarga
+
+```json
+PATCH /api/activities/1/subtasks/3/
+Authorization: Bearer <access_token>
+
+{ "fecha_objetivo": "2026-03-10", "horas_estimadas": 3.0 }
+```
+
+Si hay sobrecarga → `409 Conflict`:
+```json
+{
+  "conflicto": true,
+  "mensaje": "Quedarías con 7.0h planificadas (límite 6.0h)",
+  "horas_planificadas": 4.0,
+  "horas_nuevas": 7.0,
+  "limite": 6.0,
+  "sugerencias": [
+    { "fecha": "2026-03-11", "horas_disponibles": 4.0 }
+  ]
+}
+```
+
+Para forzar el guardado ignorando el conflicto:
+```json
+{ "fecha_objetivo": "2026-03-10", "horas_estimadas": 3.0, "forzar": true }
+```
+
 #### Conectar al WebSocket de la vista del día
 
 ```javascript
@@ -175,15 +268,17 @@ miniproyecto-back/
 │   │   └── asgi.py            # Entrada ASGI — maneja HTTP y WebSockets
 │   ├── apps/                  # Carpeta que agrupa todas las apps del proyecto
 │   │   ├── users/             # App de usuarios y autenticación
-│   │   │   ├── models.py      # Modelo Usuario (tabla existente en Supabase)
-│   │   │   ├── views.py       # Vistas: listar usuarios y registrar cuenta
-│   │   │   ├── urls.py        # Rutas: /api/users/ y /api/users/register/
-│   │   │   ├── apps.py        # Configuración de la app
+│   │   │   ├── models.py      # Modelos: Usuario (Supabase) y PerfilUsuario
+│   │   │   ├── views.py       # Vistas: registro, perfil y cambio de contraseña
+│   │   │   ├── urls.py        # Rutas: /api/users/, /profile/, /change-password/
+│   │   │   ├── apps.py        # Configuración + registro del signal post_save
+│   │   │   ├── signals.py     # Crea PerfilUsuario automáticamente al registrar usuario
 │   │   │   └── admin.py       # Registro en el panel admin
 │   │   └── activities/        # App de actividades evaluativas y subtareas
 │   │       ├── models.py      # Modelos Activity (con TipoCurso) y SubActivity
 │   │       ├── serializers.py # Serializers con validaciones de fechas y rangos
-│   │       ├── views.py       # Vistas CRUD + TodayView con notificación WebSocket
+│   │       ├── views.py       # Vistas CRUD + TodayView + detección de sobrecarga
+│   │       ├── utils.py       # Utilidades: cálculo de horas por día y sugerencias
 │   │       ├── consumers.py   # Consumer WebSocket para la vista en tiempo real
 │   │       ├── routing.py     # Rutas WebSocket: ws/activities/today/
 │   │       ├── urls.py        # Rutas HTTP: /api/activities/ y subtasks/
@@ -234,22 +329,22 @@ Tabla estándar de Django usada para el sistema de autenticación (login/registe
 | `calculo` | Cálculo |
 | `algebra` | Álgebra Lineal |
 | `estadistica` | Estadística |
-| `programacion` | Programación |
-| `estructuras_de_datos` | Estructuras de Datos |
-| `bases_de_datos` | Bases de Datos |
-| `redes` | Redes de Computadores |
-| `sistemas_operativos` | Sistemas Operativos |
-| `ingenieria_de_software` | Ingeniería de Software |
-| `arquitectura` | Arquitectura de Computadores |
-| `inteligencia_artificial` | Inteligencia Artificial |
 | `fisica` | Física |
 | `quimica` | Química |
+| `biologia` | Biología |
+| `programacion` | Programación |
+| `estructuras` | Estructuras de Datos |
+| `bases_datos` | Bases de Datos |
+| `redes` | Redes de Computadores |
+| `sistemas_op` | Sistemas Operativos |
+| `ingenieria_sw` | Ingeniería de Software |
 | `economia` | Economía |
-| `contabilidad` | Contabilidad |
 | `administracion` | Administración |
-| `comunicacion` | Comunicación |
-| `humanidades` | Humanidades / Electiva |
-| `proyecto_integrador` | Proyecto Integrador |
+| `contabilidad` | Contabilidad |
+| `derecho` | Derecho |
+| `ingles` | Inglés |
+| `humanidades` | Humanidades |
+| `etica` | Ética |
 | `otro` | Otro |
 
 ### SubActivity
@@ -263,11 +358,23 @@ Tabla estándar de Django usada para el sistema de autenticación (login/registe
 | `horas_estimadas` | DecimalField(5,1) | Tiempo estimado en horas (ej: 1.5) — debe ser > 0 |
 | `completada` | BooleanField | Indica si la subtarea fue completada |
 
+### PerfilUsuario
+
+Perfil extendido del usuario de Django. Se crea automáticamente al registrar una cuenta nueva.
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | BigAutoField | Identificador único (PK) |
+| `usuario` | OneToOneField(User) | Usuario de Django al que pertenece |
+| `limite_horas_diarias` | DecimalField(4,1) | Máximo de horas de trabajo planificadas por día (default: 6.0) |
+
 ## Validaciones de negocio
 
 - Las actividades no pueden crearse con `fecha_evento` o `fecha_limite` anteriores a la fecha actual.
 - La `fecha_objetivo` de una subtarea debe estar dentro del rango `[fecha_evento, fecha_limite]` de su actividad padre (cuando ambas fechas estén definidas).
 - El campo `curso` solo acepta los valores definidos en `TipoCurso`.
+- Al editar una subtarea, si la suma de horas del día supera `limite_horas_diarias`, se devuelve `409` con sugerencias de días alternativos.
+- El límite diario configurable debe estar entre 0.5 y 24 horas.
 
 ## Sesión y tokens JWT
 
