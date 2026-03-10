@@ -39,8 +39,8 @@ INSTALLED_APPS = [
     'rest_framework',       # API REST con Django REST Framework
     'drf_spectacular',      # Generación automática de documentación OpenAPI
     'corsheaders',          # Permite solicitudes cross-origin desde el frontend
-    'backend.apps.users',           # App de usuarios: modelos, vistas y endpoints
-    'backend.apps.activities',      # App de actividades evaluativas y subtareas
+    'backend.apps.users.apps.UsersConfig',       # App de usuarios: modelos, vistas y endpoints
+    'backend.apps.activities',                   # App de actividades evaluativas y subtareas
 ]
 
 # --- Middleware ---

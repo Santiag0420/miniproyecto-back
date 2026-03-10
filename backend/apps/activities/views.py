@@ -1,10 +1,13 @@
-from rest_framework import generics, permissions
+from datetime import timedelta
+
+from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Activity, SubActivity
 from .serializers import ActivitySerializer, SubActivitySerializer
+from .utils import get_horas_dia, get_sugerencias
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
@@ -311,9 +314,43 @@ class SubActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
     def delete(self, request, *args, **kwargs):
         return super().delete(request, *args, **kwargs)
 
-    def perform_update(self, serializer):
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        # Detectar conflicto de sobrecarga (omitir si forzar=true)
+        forzar = str(request.data.get('forzar', 'false')).lower() in ('true', '1')
+        if not forzar:
+            nueva_fecha = serializer.validated_data.get('fecha_objetivo', instance.fecha_objetivo)
+            nuevas_horas = float(serializer.validated_data.get('horas_estimadas', instance.horas_estimadas))
+
+            try:
+                limite = float(request.user.perfil.limite_horas_diarias)
+            except Exception:
+                limite = 6.0
+
+            horas_ese_dia = get_horas_dia(request.user, nueva_fecha, exclude_subtask_id=instance.pk)
+            total_nuevo = horas_ese_dia + nuevas_horas
+
+            if total_nuevo > limite:
+                sugerencias = get_sugerencias(
+                    request.user, nuevas_horas, limite,
+                    desde=nueva_fecha + timedelta(days=1),
+                )
+                return Response({
+                    'conflicto': True,
+                    'mensaje': f'Quedarías con {total_nuevo:.1f}h planificadas (límite {limite:.1f}h)',
+                    'horas_planificadas': round(horas_ese_dia, 1),
+                    'horas_nuevas': round(total_nuevo, 1),
+                    'limite': limite,
+                    'sugerencias': sugerencias,
+                }, status=status.HTTP_409_CONFLICT)
+
         serializer.save()
-        _notify_today(self.request.user.id)
+        _notify_today(request.user.id)
+        return Response(serializer.data)
 
     def perform_destroy(self, instance):
         user_id = self.request.user.id
