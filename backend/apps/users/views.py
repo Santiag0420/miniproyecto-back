@@ -177,10 +177,10 @@ def perfil_view(request):
     if 'limite_horas_diarias' in data:
         try:
             limite = float(data['limite_horas_diarias'])
-            if not (0.5 <= limite <= 24):
+            if not (1 <= limite <= 16):
                 raise ValueError
         except (ValueError, TypeError):
-            return Response({'error': 'El límite debe ser un número entre 0.5 y 24.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'El límite debe ser un número entre 1 y 16.'}, status=status.HTTP_400_BAD_REQUEST)
         perfil.limite_horas_diarias = limite
         perfil.save()
 

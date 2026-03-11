@@ -78,12 +78,12 @@ class TodayView(APIView):
             else:
                 proximas.append(data)
 
-        # Vencidas: más antiguas primero (fecha ascendente), None al final
-        vencidas.sort(key=lambda x: x['fecha_referencia'] or '9999-12-31')
-        # Hoy: más horas pendientes primero
-        hoy.sort(key=lambda x: x['horas_pendientes'], reverse=True)
-        # Próximas: más cercanas primero (fecha ascendente), None al final
-        proximas.sort(key=lambda x: x['fecha_referencia'] or '9999-12-31')
+        # Vencidas: más antiguas primero; empate → menor esfuerzo primero
+        vencidas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
+        # Hoy: menor esfuerzo primero
+        hoy.sort(key=lambda x: x['horas_pendientes'])
+        # Próximas: más cercanas primero; empate → menor esfuerzo primero
+        proximas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
 
         return Response({
             'vencidas': vencidas,
