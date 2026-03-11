@@ -127,8 +127,8 @@ class TodayConsumer(AsyncWebsocketConsumer):
             else:
                 proximas.append(data)
 
-        vencidas.sort(key=lambda x: x['fecha_referencia'] or '9999-12-31')
-        hoy.sort(key=lambda x: x['horas_pendientes'], reverse=True)
-        proximas.sort(key=lambda x: x['fecha_referencia'] or '9999-12-31')
+        vencidas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
+        hoy.sort(key=lambda x: x['horas_pendientes'])
+        proximas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
 
         return {'vencidas': vencidas, 'hoy': hoy, 'proximas': proximas}
