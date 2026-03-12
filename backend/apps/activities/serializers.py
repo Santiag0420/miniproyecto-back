@@ -28,8 +28,10 @@ class SubActivitySerializer(serializers.ModelSerializer):
         if activity is None:
             return value
 
-        inicio = activity.fecha_evento.date() if activity.fecha_evento else None
-        fin    = activity.fecha_limite.date() if activity.fecha_limite else None
+        # ← Usar localtime() para convertir a zona horaria local antes de .date()
+        from django.utils import timezone as tz
+        inicio = tz.localtime(activity.fecha_evento).date() if activity.fecha_evento else None
+        fin = tz.localtime(activity.fecha_limite).date() if activity.fecha_limite else None
 
         if inicio and value < inicio:
             raise serializers.ValidationError(
@@ -75,4 +77,3 @@ class ActivitySerializer(serializers.ModelSerializer):
                 "La fecha límite no puede ser en el pasado."
             )
         return value
-
