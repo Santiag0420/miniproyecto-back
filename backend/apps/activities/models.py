@@ -69,9 +69,12 @@ class Activity(models.Model):
 class SubActivity(models.Model):
     """
     Subtarea que divide el trabajo de una actividad en pasos concretos.
-    Permite estimar el tiempo necesario y hacer seguimiento del avance
-    mediante el campo completada.
     """
+    class EstadoSubtarea(models.TextChoices):
+        PENDIENTE = 'pendiente', 'Pendiente'
+        HECHA     = 'hecha',     'Hecha'
+        POSPUESTA = 'pospuesta', 'Pospuesta'
+
     activity = models.ForeignKey(
         Activity,
         related_name='subactivities',
@@ -79,9 +82,13 @@ class SubActivity(models.Model):
     )
     nombre = models.CharField(max_length=255)
     fecha_objetivo = models.DateField()
-    # Tiempo estimado para completar esta subtarea (acepta decimales, ej: 1.5)
     horas_estimadas = models.DecimalField(max_digits=5, decimal_places=1)
-    completada = models.BooleanField(default=False)
+    estado = models.CharField(
+        max_length=15,
+        choices=EstadoSubtarea.choices,
+        default=EstadoSubtarea.PENDIENTE,
+    )
+    nota_posposicion = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.nombre
