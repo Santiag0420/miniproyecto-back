@@ -128,8 +128,8 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    # Indica a DRF que use drf-spectacular para generar el esquema OpenAPI
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'EXCEPTION_HANDLER': 'backend.apps.activities.exception_handler.custom_exception_handler',
 }
 
 # --- Configuración de tokens JWT ---
