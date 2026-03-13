@@ -21,8 +21,8 @@ from django.utils import timezone
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 
-from .models import Activity
-from .serializers import ActivitySerializer
+from .models import SubActivity
+from .serializers import SubtareaHoySerializer
 
 
 class TodayConsumer(AsyncWebsocketConsumer):
@@ -94,41 +94,30 @@ class TodayConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _build_today_data(self):
         """Misma lógica que TodayView, ejecutada en el thread pool de Django."""
-        today = timezone.localdate()
-        now = timezone.now()
-        activities = (
-            Activity.objects
-            .filter(usuario=self.user)
-            .prefetch_related('subactivities')
-        )
+        from datetime import timedelta
+        from django.db.models import Sum
 
-        vencidas, hoy, proximas = [], [], []
+        hoy = timezone.localdate()
 
-        for activity in activities:
-            dt_ref = activity.fecha_limite or activity.fecha_evento
+        base_qs = SubActivity.objects.filter(
+            activity__usuario=self.user,
+        ).exclude(estado='hecha').select_related('activity')
 
-            horas = sum(
-                s.horas_estimadas for s in activity.subactivities.all()
-                if not s.completada
-            )
+        overdue = list(base_qs.filter(
+            fecha_objetivo__lt=hoy
+        ).order_by('fecha_objetivo', 'horas_estimadas'))
 
-            fecha_local = timezone.localtime(dt_ref).date() if dt_ref else None
+        today_qs = list(base_qs.filter(
+            fecha_objetivo=hoy
+        ).order_by('horas_estimadas'))
 
-            data = ActivitySerializer(activity).data
-            data['horas_pendientes'] = float(horas)
-            data['fecha_referencia'] = str(fecha_local) if fecha_local else None
+        upcoming = list(base_qs.filter(
+            fecha_objetivo__gt=hoy,
+            fecha_objetivo__lte=hoy + timedelta(days=7),
+        ).order_by('fecha_objetivo', 'horas_estimadas'))
 
-            if dt_ref is None:
-                proximas.append(data)
-            elif dt_ref < now:
-                vencidas.append(data)
-            elif fecha_local == today:
-                hoy.append(data)
-            else:
-                proximas.append(data)
-
-        vencidas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
-        hoy.sort(key=lambda x: x['horas_pendientes'])
-        proximas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
-
-        return {'vencidas': vencidas, 'hoy': hoy, 'proximas': proximas}
+        return {
+            'overdue':  SubtareaHoySerializer(overdue, many=True).data,
+            'today':    SubtareaHoySerializer(today_qs, many=True).data,
+            'upcoming': SubtareaHoySerializer(upcoming, many=True).data,
+        }
