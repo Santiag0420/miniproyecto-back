@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound
@@ -6,8 +7,8 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParamet
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Activity, SubActivity
-from .serializers import ActivitySerializer, SubActivitySerializer
-from .utils import get_horas_dia, get_sugerencias
+from .serializers import ActivitySerializer, SubActivitySerializer, SubtareaHoySerializer
+from .utils import get_horas_dia, get_sugerencias, verificar_conflicto, generar_sugerencias
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
@@ -25,70 +26,81 @@ def _notify_today(user_id):
 
 @extend_schema(
     tags=['Actividades'],
-    summary="Vista de hoy: actividades por prioridad",
-    description="Devuelve las actividades del usuario agrupadas en vencidas, de hoy y próximas, ordenadas por horas pendientes descendente.",
+    summary="Vista de hoy: subtareas agrupadas por fecha",
+    description=(
+        "Retorna subtareas del usuario agrupadas en overdue/today/upcoming según su fecha_objetivo. "
+        "Cada subtarea incluye contexto de la actividad padre. Las subtareas con estado='hecha' no aparecen. "
+        "Filtros opcionales: ?curso=, ?estado=, ?upcoming_days= (defecto 7)."
+    ),
     responses={
-        200: ActivitySerializer(many=True),
+        200: OpenApiResponse(description='Subtareas agrupadas'),
         401: OpenApiResponse(description='No autenticado'),
     },
 )
 class TodayView(APIView):
     """
-    Vista 'Hoy': devuelve las actividades del usuario ordenadas por prioridad.
-    Orden: Vencidas > Hoy > Próximas. Desempate por horas_estimadas (mayor primero).
+    Vista 'Hoy': subtareas agrupadas por su fecha_objetivo.
+    - overdue:  fecha_objetivo < hoy
+    - today:    fecha_objetivo = hoy
+    - upcoming: fecha_objetivo > hoy (hasta upcoming_days días)
+    Las subtareas con estado='hecha' no aparecen en ningún grupo.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        today = timezone.localdate()
+        from django.db.models import Sum
+        hoy = timezone.localdate()
 
-        activities = Activity.objects.filter(
-            usuario=request.user
-        ).prefetch_related('subactivities')
+        try:
+            upcoming_days = int(request.query_params.get('upcoming_days', 7))
+        except (ValueError, TypeError):
+            upcoming_days = 7
 
-        vencidas = []
-        hoy = []
-        proximas = []
+        # Base: subtareas del usuario, excluye las hechas
+        base_qs = SubActivity.objects.filter(
+            activity__usuario=request.user,
+        ).exclude(estado='hecha').select_related('activity')
 
-        now = timezone.now()
+        filtro_curso = request.query_params.get('curso')
+        if filtro_curso:
+            base_qs = base_qs.filter(activity__curso=filtro_curso)
 
-        for activity in activities:
-            # Usar fecha_limite como referencia principal; fecha_evento como fallback
-            dt_ref = activity.fecha_limite or activity.fecha_evento
+        filtro_estado = request.query_params.get('estado')
+        if filtro_estado:
+            base_qs = base_qs.filter(estado=filtro_estado)
 
-            # Calcular total de horas estimadas de subtareas no completadas
-            horas = sum(
-                s.horas_estimadas for s in activity.subactivities.all()
-                if not s.completada
-            )
+        overdue = base_qs.filter(
+            fecha_objetivo__lt=hoy
+        ).order_by('fecha_objetivo', 'horas_estimadas')
 
-            fecha_local = timezone.localtime(dt_ref).date() if dt_ref else None
+        today_qs = base_qs.filter(
+            fecha_objetivo=hoy
+        ).order_by('horas_estimadas')
 
-            data = ActivitySerializer(activity).data
-            data['horas_pendientes'] = float(horas)
-            data['fecha_referencia'] = str(fecha_local) if fecha_local else None
+        upcoming = base_qs.filter(
+            fecha_objetivo__gt=hoy,
+            fecha_objetivo__lte=hoy + timedelta(days=upcoming_days),
+        ).order_by('fecha_objetivo', 'horas_estimadas')
 
-            if dt_ref is None:
-                proximas.append(data)
-            elif dt_ref < now:
-                # El datetime ya pasó → vencida (aunque la fecha sea hoy)
-                vencidas.append(data)
-            elif fecha_local == today:
-                hoy.append(data)
-            else:
-                proximas.append(data)
+        horas_hoy = today_qs.aggregate(total=Sum('horas_estimadas'))['total'] or 0
 
-        # Vencidas: más antiguas primero; empate → menor esfuerzo primero
-        vencidas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
-        # Hoy: menor esfuerzo primero
-        hoy.sort(key=lambda x: x['horas_pendientes'])
-        # Próximas: más cercanas primero; empate → menor esfuerzo primero
-        proximas.sort(key=lambda x: (x['fecha_referencia'] or '9999-12-31', x['horas_pendientes']))
+        try:
+            limite = float(request.user.perfil.limite_horas_diarias)
+        except Exception:
+            limite = 6.0
 
         return Response({
-            'vencidas': vencidas,
-            'hoy': hoy,
-            'proximas': proximas,
+            'overdue':   SubtareaHoySerializer(overdue, many=True).data,
+            'today':     SubtareaHoySerializer(today_qs, many=True).data,
+            'upcoming':  SubtareaHoySerializer(upcoming, many=True).data,
+            'summary': {
+                'overdue_count':         overdue.count(),
+                'today_count':           today_qs.count(),
+                'upcoming_count':        upcoming.count(),
+                'horas_planificadas_hoy': round(float(horas_hoy), 1),
+                'limite_diario':          limite,
+                'horas_disponibles_hoy':  round(max(0.0, limite - float(horas_hoy)), 1),
+            },
         })
 
 
@@ -317,37 +329,62 @@ class SubActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
+
+        # --- Detección de reprogramación (US-06 / US-07) ---
+        nueva_fecha_str = request.data.get('fecha_objetivo')
+        forzar = str(request.data.get('forzar', 'false')).lower() in ('true', '1')
+
+        if nueva_fecha_str and not forzar:
+            from datetime import date as date_type
+            try:
+                nueva_fecha = date_type.fromisoformat(str(nueva_fecha_str))
+            except (ValueError, TypeError):
+                nueva_fecha = None
+
+            # Solo verificar si la fecha realmente cambió
+            if nueva_fecha is not None and instance.fecha_objetivo != nueva_fecha:
+                # Usar las nuevas horas si el usuario también las cambia (opción reducir)
+                nuevas_horas_raw = request.data.get('horas_estimadas')
+                horas_para_calculo = (
+                    Decimal(str(nuevas_horas_raw))
+                    if nuevas_horas_raw is not None
+                    else instance.horas_estimadas
+                )
+
+                resultado = verificar_conflicto(
+                    usuario=request.user,
+                    dia=nueva_fecha,
+                    horas_subtarea=horas_para_calculo,
+                    excluir_subtarea_id=instance.pk,
+                )
+
+                if resultado['conflict']:
+                    sugerencias = generar_sugerencias(
+                        usuario=request.user,
+                        dia=nueva_fecha,
+                        horas_subtarea=horas_para_calculo,
+                        subtarea_id=instance.pk,
+                    )
+                    return Response({
+                        'error': {
+                            'code': 'OVERLOAD_CONFLICT',
+                            'message': (
+                                f"Quedarías con {resultado['planned_hours']:.1f}h "
+                                f"planificadas (límite {resultado['daily_limit']:.1f}h)"
+                            ),
+                            'detail': {
+                                'target_date': str(nueva_fecha),
+                                'planned_hours': resultado['planned_hours'],
+                                'daily_limit': resultado['daily_limit'],
+                                'excess_hours': resultado['excess_hours'],
+                            },
+                            'suggestions': sugerencias,
+                        }
+                    }, status=status.HTTP_409_CONFLICT)
+
+        # Sin conflicto o forzado → guardar normalmente
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-
-        # Detectar conflicto de sobrecarga (omitir si forzar=true)
-        forzar = str(request.data.get('forzar', 'false')).lower() in ('true', '1')
-        if not forzar:
-            nueva_fecha = serializer.validated_data.get('fecha_objetivo', instance.fecha_objetivo)
-            nuevas_horas = float(serializer.validated_data.get('horas_estimadas', instance.horas_estimadas))
-
-            try:
-                limite = float(request.user.perfil.limite_horas_diarias)
-            except Exception:
-                limite = 6.0
-
-            horas_ese_dia = get_horas_dia(request.user, nueva_fecha, exclude_subtask_id=instance.pk)
-            total_nuevo = horas_ese_dia + nuevas_horas
-
-            if total_nuevo > limite:
-                sugerencias = get_sugerencias(
-                    request.user, nuevas_horas, limite,
-                    desde=nueva_fecha + timedelta(days=1),
-                )
-                return Response({
-                    'conflicto': True,
-                    'mensaje': f'Quedarías con {total_nuevo:.1f}h planificadas (límite {limite:.1f}h)',
-                    'horas_planificadas': round(horas_ese_dia, 1),
-                    'horas_nuevas': round(total_nuevo, 1),
-                    'limite': limite,
-                    'sugerencias': sugerencias,
-                }, status=status.HTTP_409_CONFLICT)
-
         serializer.save()
         _notify_today(request.user.id)
         return Response(serializer.data)
@@ -373,3 +410,51 @@ class SubActivityDetailView(generics.RetrieveUpdateDestroyAPIView):
             activity_id=self.kwargs['activity_pk'],
             activity__usuario=self.request.user
         )
+
+
+@extend_schema(
+    tags=['Actividades'],
+    summary="Carga de trabajo de un día",
+    description="Devuelve las horas planificadas para una fecha específica, el límite diario y las subtareas asignadas a ese día.",
+    responses={200: OpenApiResponse(description='Carga del día'), 400: OpenApiResponse(description='Fecha inválida')},
+)
+class DayWorkloadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, fecha):
+        from datetime import date as date_type
+        try:
+            dia = date_type.fromisoformat(str(fecha))
+        except (ValueError, TypeError):
+            return Response({'error': 'Fecha inválida. Usa formato YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            limite = float(request.user.perfil.limite_horas_diarias)
+        except Exception:
+            limite = 6.0
+
+        subtareas = SubActivity.objects.filter(
+            activity__usuario=request.user,
+            fecha_objetivo=dia,
+        ).exclude(estado='hecha').select_related('activity')
+
+        horas_planificadas = float(sum(s.horas_estimadas for s in subtareas))
+
+        return Response({
+            'fecha': str(dia),
+            'horas_planificadas': round(horas_planificadas, 1),
+            'limite_diario': limite,
+            'horas_disponibles': round(max(0.0, limite - horas_planificadas), 1),
+            'sobrecargado': horas_planificadas > limite,
+            'subtareas': [
+                {
+                    'id': s.id,
+                    'nombre': s.nombre,
+                    'horas_estimadas': float(s.horas_estimadas),
+                    'estado': s.estado,
+                    'actividad_id': s.activity_id,
+                    'actividad_titulo': s.activity.titulo,
+                }
+                for s in subtareas
+            ],
+        })
